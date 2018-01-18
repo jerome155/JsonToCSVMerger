@@ -7,8 +7,8 @@
     <ProjectGuid>{EFE7EF07-FB97-45F3-B21A-90A82A586FB2}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>JsonToCSVMerge</RootNamespace>
-    <AssemblyName>JsonToCSVMerge</AssemblyName>
+    <RootNamespace>JsonToCSVMerger</RootNamespace>
+    <AssemblyName>JsonToCSVMerger</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>

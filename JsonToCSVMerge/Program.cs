@@ -10,7 +10,17 @@ namespace JsonToCSVMerge
     {
         static void Main(string[] args)
         {
-            string path = args[0];
+            string path = "";
+            if (args.Length < 1)
+            {
+                Console.WriteLine("Please specify folder path as argument.");
+                Console.ReadLine();
+                System.Environment.Exit(0);
+            }
+            else
+            {
+                path = args[0];
+            }
             string[] files = loadFiles(path);
 
             DataTable table = JsonReader.Run(files);
