@@ -23,16 +23,19 @@ namespace JsonToCSVMerge
             }
             string[] files = loadFiles(path);
 
-            DataTable table = JsonReader.Run(files);
-            
-            CsvCreator.WriteCsv(table, path);
+            CsvCreator.SetPath(path);
+
+            JsonReader.Run(files);
+
+            CsvCreator.Close();
+
             Console.WriteLine("Press any key to continue.");
             Console.ReadLine();
         }
 
         private static string[] loadFiles(string path)
         {
-            string[] files = System.IO.Directory.GetFiles(path, "*.*", System.IO.SearchOption.AllDirectories);
+            string[] files = System.IO.Directory.GetFiles(path, "*.json", System.IO.SearchOption.AllDirectories);
             Console.WriteLine("Found " + files.Length + " files.");
             return files;
         }

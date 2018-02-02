@@ -14,32 +14,48 @@ namespace JsonToCSVMerge
         public const string delimiter = ",";
         public const string fileName = "/output.csv";
 
-        public static void WriteCsv(DataTable table, string path)
-        {
-            StreamWriter csvString = new StreamWriter(path + fileName);
-            using (var csv = new CsvWriter(csvString))
-            {
-                csv.Configuration.Delimiter = delimiter;
+        private static StreamWriter csvString;
+        private static CsvWriter csv;
+        private static string path;
 
-                using (table)
+
+        public static void SetPath(string _path)
+        {
+            path = _path;
+        }
+
+        public static void WriteRecordsToCsv(DataTable table)
+        {
+            if (csvString == null)
+            {
+                csvString = new StreamWriter(path + fileName);
+                csv = new CsvWriter(csvString);
+                csv.Configuration.Delimiter = delimiter;
+                foreach (DataColumn column in table.Columns)
                 {
-                    foreach (DataColumn column in table.Columns)
+                    csv.WriteField(column.ColumnName);
+                }
+                csv.NextRecord();
+            }
+
+            using (table)
+            {
+                foreach (DataRow row in table.Rows)
+                {
+                    for (var i = 0; i < table.Columns.Count; i++)
                     {
-                        csv.WriteField(column.ColumnName);
+                        csv.WriteField(row[i]);
                     }
                     csv.NextRecord();
-
-                    foreach (DataRow row in table.Rows)
-                    {
-                        for (var i = 0; i < table.Columns.Count; i++)
-                        {
-                            csv.WriteField(row[i]);
-                        }
-                        csv.NextRecord();
-                    }
                 }
             }
-            csvString.Close();
         }
+
+        public static void Close()
+        {
+            csvString.Close();
+            csvString.Dispose();
+        }
+
     }
 }

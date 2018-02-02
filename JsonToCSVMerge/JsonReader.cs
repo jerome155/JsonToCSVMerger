@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json;
+﻿//#define debug
+
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -14,7 +16,7 @@ namespace JsonToCSVMerge
         private static bool isHeaderCreated;
         private static List<String> nestedHeaderNames = null;
 
-        public static DataTable Run(string[] files)
+        public static void Run(string[] files)
         {
             DataTable table = new DataTable();
             for (int i = 0; i < files.Length; i++)
@@ -28,8 +30,9 @@ namespace JsonToCSVMerge
 #endif
                 Console.WriteLine("Evaluating document " + i + ": " + files[i]);
                 table = TransformJsonFileToDataTable(files[i], table);
+                CsvCreator.WriteRecordsToCsv(table);
+                table.Rows.Clear();
             }
-            return table;
         }
 
         private static DataTable TransformJsonFileToDataTable(string file, DataTable table)
@@ -52,13 +55,11 @@ namespace JsonToCSVMerge
                         Console.WriteLine(e.Message);
                         continue;
                     }
-
                     //Create header if not yet existing.
                     if (!isHeaderCreated)
                     {
                         table = CreateDataTableHeader(jsonInput, table);
                     }
-
                     //Add the new row
                     table = AddRowToTable(jsonInput, table);
                 }
