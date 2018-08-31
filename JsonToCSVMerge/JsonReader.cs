@@ -1,53 +1,43 @@
-﻿//#define debug
-
+﻿using JsonToCSVMerge;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace JsonToCSVMerge
+namespace JsonToCSVMerger
 {
-    public static class JsonReader
+    class JsonReader
     {
-        private static bool isHeaderCreated;
-        private static List<String> nestedHeaderNames = null;
 
-        public static void Run(string[] files)
+        private DataTable table;
+
+        public void run(string[] inputFiles)
         {
-            DataTable table = new DataTable();
-            for (int i = 0; i < files.Length; i++)
+            for (int i = 0; i < inputFiles.Length; i++)
             {
-#if debug
-                if (i > 2)
-                {
-                    continue;
-                    Console.WriteLine("Running mode: Debug.");
-                }
-#endif
-                Console.WriteLine("Evaluating document " + i + ": " + files[i]);
-                table = TransformJsonFileToDataTable(files[i], table);
+                readJson(inputFiles[i]);
+                Console.WriteLine("Evaluating document " + i + ": " + inputFiles[i]);
                 CsvCreator.WriteRecordsToCsv(table);
                 table.Rows.Clear();
             }
         }
 
-        private static DataTable TransformJsonFileToDataTable(string file, DataTable table)
+        public void readJson(string inputFile)
         {
-            string jsonContent = "";
-            using (StreamReader r = new StreamReader(file))
+
+            using (StreamReader r = new StreamReader(inputFile))
             {
-                List<string> jsonObjects = SplitConcatenatedJson(r, jsonContent);
+                List<string> jsonObjects = SplitConcatenatedJson(r);
 
                 for (int j = 0; j < jsonObjects.Count; j++)
                 {
-                    dynamic jsonInput = null;
+                    IDictionary<string, object> jsonOutput = null;
                     try
                     {
-                        jsonInput = JsonConvert.DeserializeObject(jsonObjects[j]);
+                        jsonOutput = JsonConvert.DeserializeObject<IDictionary<string, object>>(jsonObjects[j]);
                     }
                     catch (Exception e)
                     {
@@ -55,22 +45,73 @@ namespace JsonToCSVMerge
                         Console.WriteLine(e.Message);
                         continue;
                     }
-                    //Create header if not yet existing.
-                    if (!isHeaderCreated)
+                    IDictionary<string, object> outputObjects = new Dictionary<string, object>();
+                    foreach (KeyValuePair<string, object> kvp in jsonOutput)
                     {
-                        table = CreateDataTableHeader(jsonInput, table);
+                        if (kvp.Value.GetType().Equals(typeof(JObject)))
+                        {
+                            JObject convObj = (JObject)kvp.Value;
+                            addAll(outputObjects, recursivelyExtractJsonObject(convObj));
+                        } else
+                        {
+                            outputObjects.Add(kvp);
+                        }
                     }
-                    //Add the new row
-                    table = AddRowToTable(jsonInput, table);
+
+                    if (table == null)
+                    {
+                        table = new DataTable();
+                    }
+
+                    DataRow row = table.NewRow();
+                    foreach (KeyValuePair<string, object> kvp in outputObjects)
+                    {
+                        
+                        if (!table.Columns.Contains(kvp.Key))
+                        {
+                            table.Columns.Add(kvp.Key);
+                        }
+                        row[kvp.Key] = kvp.Value;
+                        
+                    }
+                    table.Rows.Add(row);
                 }
             }
-            return table;
-
         }
 
-        private static List<string> SplitConcatenatedJson(StreamReader r, string jsonContent)
+
+        private IDictionary<string, object> recursivelyExtractJsonObject(JObject obj)
         {
-            jsonContent = r.ReadToEnd();
+            JObject convObj = (JObject)obj;
+            IDictionary<string, object> outputObjs = convObj.ToObject<IDictionary<string, object>>();
+            IDictionary<string, object> containedObjs = new Dictionary<string, object>();
+            foreach (object recObj in outputObjs.Values)
+            {
+                if (recObj == null)
+                {
+                    continue;
+                }
+                if (recObj.GetType().Equals(typeof(JObject)))
+                {
+                    addAll(containedObjs, recursivelyExtractJsonObject((JObject)recObj));
+                }
+            }
+            addAll(outputObjs, containedObjs);
+            return outputObjs;
+        }
+
+        private IDictionary<string, object> addAll(IDictionary<string, object> into, IDictionary<string, object> outOf)
+        {
+            foreach (KeyValuePair<string, object> outObj in outOf)
+            {
+                into.Add(outObj);
+            }
+            return into;
+        }
+
+        private static List<string> SplitConcatenatedJson(StreamReader r)
+        {
+            String jsonContent = r.ReadToEnd();
             List<string> jsonObjects = new List<string>();
 
             string[] splitContent = jsonContent.Split(new string[] { "}\n{" }, StringSplitOptions.None);
@@ -96,132 +137,6 @@ namespace JsonToCSVMerge
                 }
             }
             return jsonObjects;
-        }
-
-        private static DataTable CreateDataTableHeader(dynamic jsonInput, DataTable mainTable)
-        {
-            Console.WriteLine("Building Table Header.");
-            foreach (dynamic token in jsonInput)
-            {
-                if (Convert.ToString(token.Value).Contains("{"))
-                {
-                    nestedHeaderNames = DeserializeNestedObjectHeader(Convert.ToString(token.Name), Convert.ToString(token.Value));
-                    foreach (string element in nestedHeaderNames)
-                    {
-                        if (!mainTable.Columns.Contains(element))
-                        {
-                            mainTable.Columns.Add(element);
-                            isHeaderCreated = true;
-                        }
-                    }
-                }
-                else
-                {
-                    if (!mainTable.Columns.Contains(token.Name))
-                    {
-                        mainTable.Columns.Add(token.Name);
-                        isHeaderCreated = true;
-                    }
-                }
-
-            }
-            return mainTable;
-        }
-
-        private static DataTable AddRowToTable(dynamic jsonInput, DataTable mainTable)
-        {
-            DataRow newRow = mainTable.NewRow();
-            foreach (dynamic token in jsonInput)
-            {
-                if (Convert.ToString(token.Value).Contains("{"))
-                {
-                    List<string> nestedValues = DeserializeNestedObjectValues(nestedHeaderNames, Convert.ToString(token.Value));
-                    for (int i = 0; i < nestedHeaderNames.Count(); i++)
-                    {
-                        newRow[nestedHeaderNames[i]] = nestedValues[i];
-                    }
-                }
-                else
-                {
-                    string tempValue = token.Value;
-                    tempValue.Replace("\"", "");
-                    newRow[token.Name] = tempValue;
-                }
-            }
-            mainTable.Rows.Add(newRow);
-            return mainTable;
-        }
-
-
-
-        public static List<String> DeserializeNestedObjectHeader(string name, string value)
-        {
-            List<String> nestedHeaders = new List<String>();
-            while (value.IndexOf("\r") >= 0 || value.IndexOf("}") >= 0)
-            {
-                if (value.IndexOf("\r") >= 0)
-                {
-                    if (value.Substring(0, value.IndexOf("\r")).Length > 2)
-                    {
-                        nestedHeaders.Add(value.Substring(0, value.IndexOf("\r")));
-                        value = value.Substring(value.IndexOf("\r") + 1, value.Length - value.IndexOf("\r") - 1);
-                    }
-                    else
-                    {
-                        value = value.Substring(value.IndexOf("\r") + 1, value.Length - value.IndexOf("\r") - 1);
-                    }
-                }
-                else
-                {
-                    value = "";
-                }
-            }
-            for (int i = 0; i < nestedHeaders.Count; i++)
-            {
-                string tempHeader = nestedHeaders[i];
-                tempHeader = tempHeader.Replace("{", "");
-                tempHeader = tempHeader.Replace("}", "");
-                tempHeader = tempHeader.Replace("\n", "");
-                tempHeader = tempHeader.Replace("\r", "");
-                tempHeader = tempHeader.Replace("\\", "");
-                tempHeader = tempHeader.Substring(tempHeader.IndexOf("\"") + 1);
-                //Last element
-                if (tempHeader.IndexOf("\"") >= 0)
-                {
-                    tempHeader = tempHeader.Substring(0, tempHeader.IndexOf("\""));
-                }
-                nestedHeaders[i] = tempHeader;
-            }
-            return nestedHeaders;
-        }
-
-        public static List<String> DeserializeNestedObjectValues(List<string> names, string value)
-        {
-            value = value.Replace("{", "");
-            value = value.Replace("}", "");
-            value = value.Replace("\n", "");
-            value = value.Replace("\r", "");
-            value = value.Replace("\\", "");
-
-            List<String> nestedValues = new List<String>();
-            foreach (string name in names)
-            {
-                string nameValue = value.Substring(value.IndexOf(name) + name.Length + 1);
-                nameValue = nameValue.Substring(nameValue.IndexOf(":") + 2);
-
-                if (nameValue.IndexOf(",") >= 0)
-                {
-                    nameValue = nameValue.Substring(0, nameValue.IndexOf(","));
-                }
-
-                //remove quotes if there
-                if (nameValue.IndexOf("\"") >= 0)
-                {
-                    nameValue = nameValue.Substring(1, nameValue.Length - 2);
-                }
-                nestedValues.Add(nameValue);
-            }
-            return nestedValues;
         }
     }
 }

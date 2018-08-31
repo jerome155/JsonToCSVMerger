@@ -1,5 +1,6 @@
 ﻿//#define debug
 
+using JsonToCSVMerger;
 using System;
 using System.Data;
 
@@ -25,7 +26,9 @@ namespace JsonToCSVMerge
 
             CsvCreator.SetPath(path);
 
-            JsonReader.Run(files);
+            JsonReader reader = new JsonReader();
+            reader.run(files);
+            //JsonReader.Run(files);
 
             CsvCreator.Close();
 
