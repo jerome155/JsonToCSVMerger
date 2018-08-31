@@ -14,9 +14,11 @@ namespace JsonToCSVMerge
         public const string delimiter = ",";
         public const string fileName = "/output.csv";
 
-        private static StreamWriter csvString;
+        private static StreamWriter streamWriter;
         private static CsvWriter csv;
         private static string path;
+
+        private static DataColumnCollection previousDataColumns;
 
 
         public static void SetPath(string _path)
@@ -26,23 +28,102 @@ namespace JsonToCSVMerge
 
         public static void WriteRecordsToCsv(DataTable table)
         {
-            if (csvString == null)
+            DataTable outTable = new DataTable();
+
+            //case: the format has changed.
+            Boolean isSame = true;
+            if (previousDataColumns != null)
             {
-                csvString = new StreamWriter(path + fileName);
-                csv = new CsvWriter(csvString);
-                csv.Configuration.Delimiter = delimiter;
+                foreach (DataColumn dataCol in table.Columns)
+                {
+                    if (!previousDataColumns.Contains(dataCol.ColumnName))
+                    {
+                        isSame = false;
+                        break;
+                    }
+                }
+            }
+            
+            if (!isSame & streamWriter != null)
+            {
+                Console.WriteLine("Difference in Header detected. Rewriting csv file.");
+                streamWriter.Close();
+                streamWriter.Dispose();
+                streamWriter = null;
+                StreamReader streamReader = new StreamReader(path + fileName);
+                CsvReader csv = new CsvReader(streamReader);
+
+                //read header contents
+                csv.Read();
+                csv.ReadHeader();
+                string[] headerRow = csv.Context.HeaderRecord;
+
+                foreach (string headerField in headerRow)
+                {
+                    outTable.Columns.Add(headerField);
+                }
+
+                //read contents
+                while (csv.Read())
+                {
+                    var row = outTable.NewRow();
+                    foreach (DataColumn column in outTable.Columns)
+                    {
+                        row[column.ColumnName] = csv.GetField(column.DataType, column.ColumnName);
+                    }
+                    outTable.Rows.Add(row);
+                }
+
+                previousDataColumns = outTable.Columns;
+                streamReader.Close();
+                streamReader.Dispose();
+
+                //merge table & outtable
+                //add missing columns
                 foreach (DataColumn column in table.Columns)
+                {
+                    if (!outTable.Columns.Contains(column.ColumnName))
+                    {
+                        outTable.Columns.Add(column.ColumnName);
+                    }
+                }
+                //merge existing records and new ones
+                foreach (DataRow row in table.Rows)
+                {
+                    DataRow newRow = outTable.NewRow();
+                    foreach (DataColumn dataCol in row.Table.Columns)
+                    {
+                        newRow[dataCol.ColumnName] = row[dataCol.ColumnName];
+                    }
+                    
+                    outTable.Rows.Add(newRow);
+                }
+            } else
+            {
+                previousDataColumns = table.Columns;
+                outTable = table;
+            }
+           
+
+            //create a new streamwriter, write header
+            if (streamWriter == null)
+            {
+                streamWriter = new StreamWriter(path + fileName, false);
+                csv = new CsvWriter(streamWriter);
+                csv.Configuration.Delimiter = delimiter;
+                foreach (DataColumn column in outTable.Columns)
                 {
                     csv.WriteField(column.ColumnName);
                 }
                 csv.NextRecord();
             }
 
-            using (table)
+            //write new rows
+            using (outTable)
             {
-                foreach (DataRow row in table.Rows)
+                foreach (DataRow row in outTable.Rows)
                 {
-                    for (var i = 0; i < table.Columns.Count; i++)
+                    for (var i = 0; i < outTable.Columns.Count; i++)
                     {
                         csv.WriteField(row[i]);
                     }
@@ -53,8 +134,8 @@ namespace JsonToCSVMerge
 
         public static void Close()
         {
-            csvString.Close();
-            csvString.Dispose();
+            streamWriter.Close();
+            streamWriter.Dispose();
         }
 
     }

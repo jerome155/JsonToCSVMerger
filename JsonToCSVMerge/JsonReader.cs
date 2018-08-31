@@ -12,21 +12,19 @@ namespace JsonToCSVMerger
     class JsonReader
     {
 
-        private DataTable table;
-
         public void run(string[] inputFiles)
         {
             for (int i = 0; i < inputFiles.Length; i++)
             {
-                readJson(inputFiles[i]);
+                DataTable table = readJson(inputFiles[i]);
                 Console.WriteLine("Evaluating document " + i + ": " + inputFiles[i]);
                 CsvCreator.WriteRecordsToCsv(table);
-                table.Rows.Clear();
             }
         }
 
-        public void readJson(string inputFile)
+        public DataTable readJson(string inputFile)
         {
+            DataTable table = new DataTable();
 
             using (StreamReader r = new StreamReader(inputFile))
             {
@@ -58,11 +56,6 @@ namespace JsonToCSVMerger
                         }
                     }
 
-                    if (table == null)
-                    {
-                        table = new DataTable();
-                    }
-
                     DataRow row = table.NewRow();
                     foreach (KeyValuePair<string, object> kvp in outputObjects)
                     {
@@ -77,6 +70,7 @@ namespace JsonToCSVMerger
                     table.Rows.Add(row);
                 }
             }
+            return table;
         }
 
 
