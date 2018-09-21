@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.IO;
 using System.Linq;
@@ -12,20 +13,37 @@ namespace JsonToCSVMerger
     class JsonReader
     {
 
-        public void run(string[] inputFiles)
+        //public event EventHandler<int> OnNextDocument;
+
+        public void Run(object sender, DoWorkEventArgs e)
         {
+            BackgroundWorker worker = (BackgroundWorker) sender;
+            Array argArray = (Array)e.Argument;
+            string[] inputFiles = (string[])argArray.GetValue(0);
+            DataTable header = (DataTable)argArray.GetValue(1);
+
             for (int i = 0; i < inputFiles.Length; i++)
             {
-                DataTable table = readJson(inputFiles[i]);
+                DataTable table = ReadJson(inputFiles[i], header);
                 Console.WriteLine("Evaluating document " + i + ": " + inputFiles[i]);
+                int percentDone = (int)((float)i / (float)inputFiles.Count()*(float)100);
+                worker.ReportProgress(percentDone);
                 CsvCreator.WriteRecordsToCsv(table);
             }
+            worker.ReportProgress(101);
         }
 
-        public DataTable readJson(string inputFile)
+        public DataTable ReadJson(string inputFile, DataTable header = null)
         {
             DataTable table = new DataTable();
-
+            if (header != null)
+            {
+                foreach (DataColumn headerCol in header.Columns)
+                {
+                    table.Columns.Add(headerCol.ColumnName);
+                }
+            }
+            
             using (StreamReader r = new StreamReader(inputFile))
             {
                 List<string> jsonObjects = SplitConcatenatedJson(r);
@@ -49,7 +67,7 @@ namespace JsonToCSVMerger
                         if (kvp.Value.GetType().Equals(typeof(JObject)))
                         {
                             JObject convObj = (JObject)kvp.Value;
-                            addAll(outputObjects, recursivelyExtractJsonObject(convObj));
+                            addAll(outputObjects, recursivelyExtractJsonObject(kvp.Key + "_", convObj));
                         } else
                         {
                             outputObjects.Add(kvp);
@@ -74,21 +92,28 @@ namespace JsonToCSVMerger
         }
 
 
-        private IDictionary<string, object> recursivelyExtractJsonObject(JObject obj)
+        private IDictionary<string, object> recursivelyExtractJsonObject(string objectName, JObject obj)
         {
             JObject convObj = (JObject)obj;
             IDictionary<string, object> outputObjs = convObj.ToObject<IDictionary<string, object>>();
             IDictionary<string, object> containedObjs = new Dictionary<string, object>();
-            foreach (object recObj in outputObjs.Values)
+            foreach (KeyValuePair<string, object> recObj in outputObjs)
             {
-                if (recObj == null)
+                if (recObj.Value == null)
                 {
                     continue;
                 }
-                if (recObj.GetType().Equals(typeof(JObject)))
+                if (recObj.Value.GetType().Equals(typeof(JObject)))
                 {
-                    addAll(containedObjs, recursivelyExtractJsonObject((JObject)recObj));
+                    addAll(containedObjs, recursivelyExtractJsonObject(objectName + recObj.Key + "_", (JObject)recObj.Value));
                 }
+            }
+            List<string> keys = new List<string>(outputObjs.Keys);
+            foreach (string key in keys)
+            {
+                object tempObj = outputObjs[key];
+                outputObjs.Remove(key);
+                outputObjs.Add(objectName + key, tempObj);
             }
             addAll(outputObjs, containedObjs);
             return outputObjs;

@@ -26,6 +26,7 @@ namespace JsonToCSVMerge
             path = _path;
         }
 
+
         public static void WriteRecordsToCsv(DataTable table)
         {
             DataTable outTable = new DataTable();

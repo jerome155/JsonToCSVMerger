@@ -3,44 +3,22 @@
 using JsonToCSVMerger;
 using System;
 using System.Data;
+using System.Windows.Forms;
 
 namespace JsonToCSVMerge
 {
     
     class Program
     {
+
+        private static string[] mainArgs;
+
+        [STAThread]
         static void Main(string[] args)
         {
-            string path = "";
-            if (args.Length < 1)
-            {
-                Console.WriteLine("Please specify folder path as argument.");
-                Console.ReadLine();
-                System.Environment.Exit(0);
-            }
-            else
-            {
-                path = args[0];
-            }
-            string[] files = loadFiles(path);
-
-            CsvCreator.SetPath(path);
-
-            JsonReader reader = new JsonReader();
-            reader.run(files);
-            //JsonReader.Run(files);
-
-            CsvCreator.Close();
-
-            Console.WriteLine("Press any key to continue.");
-            Console.ReadLine();
-        }
-
-        private static string[] loadFiles(string path)
-        {
-            string[] files = System.IO.Directory.GetFiles(path, "*.json", System.IO.SearchOption.AllDirectories);
-            Console.WriteLine("Found " + files.Length + " files.");
-            return files;
+            mainArgs = args;
+            Form main = new Main();
+            Application.Run(main);
         }
     }
 }
